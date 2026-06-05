@@ -42,8 +42,8 @@ const LOCALIDAD_NAMES = {
 };
 
 const ADMIN_CREDENTIALS = {
-  user: 'admin',
-  pass: 'valo2026'
+  user: '1001977786',
+  pass: '1001977786'
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -1192,6 +1192,48 @@ window.openLightbox = function openLightbox(type, src, title) {
   titleEl.textContent = title || 'Vista previa';
   body.innerHTML      = '';
   galleryData         = null;
+
+  /* ── DETECCIÓN AUTOMÁTICA DE TIPO DE ENLACE ─────────────────────
+     Se ejecuta ANTES de los bloques if/else existentes.
+     Redirige o transforma el src según el origen del enlace.
+  ──────────────────────────────────────────────────────────────── */
+
+  // 1. SharePoint / OneDrive — no soportan iframe: abrir en nueva pestaña
+  //    Razón: estos servicios envían X-Frame-Options: DENY, lo que provoca
+  //    el error "La página ha rechazado la conexión" dentro del iframe.
+  if (/sharepoint\.com|my\.sharepoint\.com|onedrive\.live\.com/i.test(src)) {
+    window.open(src, '_blank', 'noopener,noreferrer');
+    return; // No abrir el lightbox; la pestaña nueva es suficiente
+  }
+
+  // 2. Google Drive — convertir /view a /preview para permitir iframe embedding
+  //    Razón: Google Drive bloquea /view dentro de iframes pero permite /preview.
+  //    Solo se transforma si el enlace no tiene ya /preview.
+  if (/drive\.google\.com\/file\/d\//i.test(src)) {
+    if (!/\/preview/.test(src)) {
+      // Extraer el ID del archivo y construir la URL de preview limpia
+      const driveId = src.match(/\/file\/d\/([^/?]+)/)?.[1];
+      if (driveId) {
+        src = `https://drive.google.com/file/d/${driveId}/preview`;
+      }
+    }
+    // Mostrar en iframe dentro del lightbox existente
+    body.innerHTML = `
+      <iframe
+        src="${src}"
+        frameborder="0"
+        allowfullscreen
+        style="width:100%;height:calc(88vh - 90px);border-radius:6px;border:none;"
+      ></iframe>
+      <div style="padding:8px;text-align:right">
+        <a href="${src.replace('/preview', '/view')}" target="_blank" rel="noopener"
+           style="font-size:11px;color:#4d9fff;text-decoration:none;">↗ Abrir en Google Drive</a>
+      </div>`;
+    overlay.classList.add('open');
+    return;
+  }
+
+  /* ── FIN DETECCIÓN — continúa lógica original intacta ────────── */
 
   if (type === 'pdf') {
     // Intentar embed; si falla (CORS), abrir en nueva pestaña con botón
