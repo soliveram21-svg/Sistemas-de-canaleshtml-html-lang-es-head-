@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visor SIG — Canales Pluviales · Cartagena de Indias</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body.pick-point-mode #map { cursor: crosshair !important; }
+    body.pick-point-mode .leaflet-container { cursor: crosshair !important; }
+
+    .media-btn--ficha {
+      background: rgba(34,197,94,0.12);
+      color: #22c55e;
+      border-color: rgba(34,197,94,0.25);
+    }
+    .media-btn--ficha:hover { background: rgba(34,197,94,0.22); }
+    .media-btn--informe {
+      background: rgba(168,85,247,0.12);
+      color: #a855f7;
+      border-color: rgba(168,85,247,0.25);
+    }
+    .media-btn--informe:hover { background: rgba(168,85,247,0.22); }
+
+    /* ── LIGHTBOX ── */
+    .lightbox-overlay {
+      position: fixed; inset: 0;
+      background: rgba(5,8,18,0.88);
+      backdrop-filter: blur(6px);
+      z-index: 9999; display: none;
+      align-items: center; justify-content: center;
+      padding: 20px; animation: lb-fade-in 0.18s ease;
+    }
+    .lightbox-overlay.open { display: flex; }
+    @keyframes lb-fade-in { from { opacity:0 } to { opacity:1 } }
+    .lightbox-container {
+      background: #0d1117;
+      border: 1px solid rgba(77,159,255,0.2);
+      border-radius: 12px;
+      width: min(96vw, 1100px);
+      max-height: 92vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+      overflow: hidden; animation: lb-slide-up 0.2s ease;
+    }
+    @keyframes lb-slide-up { from { transform:translateY(16px);opacity:0 } to { transform:translateY(0);opacity:1 } }
+    .lightbox-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .lightbox-title {
+      font-family: var(--font-mono, 'Space Mono', monospace);
+      font-size: 12px; color: #4d9fff;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: calc(100% - 48px);
+    }
+    .lightbox-close {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #8899aa; border-radius: 6px;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .lightbox-close:hover { background: rgba(239,68,68,0.18); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+    .lightbox-body {
+      flex: 1; overflow: auto;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 300px; padding: 12px;
+    }
+    .lightbox-pdf { width: 100%; height: calc(88vh - 70px); min-height: 400px; border: none; border-radius: 4px; }
+    .lightbox-video { max-width: 100%; max-height: calc(88vh - 70px); border-radius: 6px; outline: none; }
+    .lightbox-image { max-width: 100%; max-height: calc(88vh - 70px); border-radius: 6px; object-fit: contain; display: block; }
+    .lightbox-gallery { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; }
+    .lightbox-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+      color: #fff; border-radius: 50%; width: 38px; height: 38px;
+      font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2; transition: background 0.15s;
+    }
+    .lightbox-nav:hover { background: rgba(77,159,255,0.3); }
+    .lightbox-nav--prev { left: 8px; }
+    .lightbox-nav--next { right: 8px; }
+    .lightbox-dots { display: flex; justify-content: center; gap: 6px; padding: 10px 0 4px; }
+    .lb-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); cursor: pointer; transition: background 0.15s; }
+    .lb-dot.active { background: #4d9fff; }
+
+    /* ── LINK INPUTS en modal multimedia ── */
+    .link-group { display: flex; flex-direction: column; gap: 6px; }
+    .link-row { display: flex; align-items: center; gap: 6px; }
+    .link-row .modal__input { flex: 1; }
+    .link-add-btn {
+      background: rgba(77,159,255,0.1); border: 1px solid rgba(77,159,255,0.3);
+      color: #4d9fff; border-radius: 6px; padding: 5px 10px;
+      font-size: 11px; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .link-add-btn:hover { background: rgba(77,159,255,0.2); }
+    .link-remove-btn {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
+      color: #ef4444; border-radius: 6px; padding: 5px 8px;
+      font-size: 13px; cursor: pointer; line-height: 1;
+      transition: background 0.15s; flex-shrink: 0;
+    }
+    .link-remove-btn:hover { background: rgba(239,68,68,0.2); }
+    .link-section-label {
+      font-size: 10px; color: var(--c-muted, #6b7c99);
+      margin-bottom: 2px; font-family: var(--font-mono, monospace);
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+
+    /* ── Fotos en panel — thumbnails de link ── */
+    .foto-thumb-link { cursor: pointer; display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ TOPBAR ═══ -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <svg class="topbar__icon" viewBox="0 0 24 24" fill="none">
+        <path d="M3 17c3-3 5-5 9-5s6 2 9-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M3 12c3-3 5-5 9-5s6 2 9-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M3 7c3-3 5-5 9-5s6 2 9-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="topbar__title">Canales Pluviales</span>
+      <span class="topbar__sub">Cartagena de Indias</span>
+    </div>
+
+    <div class="topbar__meta">
+      <div class="topbar__stat">
+        <span class="topbar__stat-val" id="stat-total">—</span>
+        <span class="topbar__stat-lbl">Canales</span>
+      </div>
+      <div class="topbar__stat">
+        <span class="topbar__stat-val" id="stat-km">—</span>
+        <span class="topbar__stat-lbl">Red total</span>
+      </div>
+      <div class="topbar__stat">
+        <span class="topbar__stat-val" id="stat-visible">—</span>
+        <span class="topbar__stat-lbl">Visibles</span>
+      </div>
+      <div class="topbar__stat">
+        <span class="topbar__stat-val" id="stat-lineas">—</span>
+        <span class="topbar__stat-lbl">Con trazado</span>
+      </div>
+    </div>
+
+    <div class="topbar__filters">
+      <select id="filter-localidad" class="filter-select">
+        <option value="">Todas las localidades</option>
+        <option value="1">Localidad 1 – Histórica</option>
+        <option value="2">Localidad 2 – Virgen y Turística</option>
+        <option value="3">Localidad 3 – Industrial</option>
+      </select>
+      <select id="filter-estado" class="filter-select">
+        <option value="">Todos los estados</option>
+        <option value="Bueno">Bueno</option>
+        <option value="Regular">Regular</option>
+        <option value="Deficiente">Deficiente</option>
+        <option value="Crítico">Crítico</option>
+      </select>
+      <button id="btn-reset" class="btn-reset" title="Limpiar filtros">✕ Limpiar</button>
+    </div>
+
+    <!-- Layer toggles -->
+    <div class="layer-toggles">
+      <button class="layer-btn active" id="toggle-puntos" title="Mostrar/ocultar puntos">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+        Puntos
+      </button>
+      <button class="layer-btn active" id="toggle-lineas" title="Mostrar/ocultar trazados">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20 L20 4"/></svg>
+        Trazados
+      </button>
+    </div>
+
+    <button class="btn-add" id="btn-add-canal" title="Añadir nuevo canal">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nuevo Canal
+    </button>
+
+    <button class="btn-readonly active" id="btn-readonly" title="Modo solo lectura activo — clic para editar">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Solo lectura
+    </button>
+  </header>
+
+  <!-- ═══ LAYOUT ═══ -->
+  <main class="layout">
+    <div id="map"></div>
+
+    <!-- ─── DRAW TOOLBAR ─── -->
+    <div class="draw-toolbar" id="draw-toolbar">
+      <div class="draw-toolbar__title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l4-4 4 4 4-8 4 4"/></svg>
+        Dibujar Trazado
+      </div>
+      <div class="draw-toolbar__canal-name" id="draw-canal-name">—</div>
+      <div class="draw-toolbar__instructions" id="draw-instructions">
+        Haz clic en el mapa para marcar puntos del canal. Doble clic para finalizar.
+      </div>
+      <div class="draw-toolbar__stats">
+        <span id="draw-pts">0 puntos</span>
+      </div>
+      <div class="draw-toolbar__actions">
+        <button class="draw-btn draw-btn--undo" id="draw-undo">↩ Deshacer</button>
+        <button class="draw-btn draw-btn--cancel" id="draw-cancel">✕ Cancelar</button>
+        <button class="draw-btn draw-btn--save" id="draw-save" disabled>✓ Guardar</button>
+      </div>
+    </div>
+
+    <!-- ─── SIDE PANEL ─── -->
+    <aside class="panel" id="panel">
+      <button class="panel__close" id="panel-close">✕</button>
+
+      <div class="panel__header">
+        <div class="panel__badge" id="p-badge">—</div>
+        <h2 class="panel__name" id="p-name">—</h2>
+        <span class="panel__cuenca" id="p-cuenca">—</span>
+      </div>
+
+      <div class="panel__estado-bar">
+        <span class="estado-dot" id="p-estado-dot"></span>
+        <span class="estado-label" id="p-estado-label">—</span>
+        <div class="panel__actions">
+          <button class="panel__action-btn panel__action-btn--draw" id="p-btn-draw" title="Dibujar trazado del canal">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l4-4 4 4 4-8 4 4"/></svg>
+            Dibujar
+          </button>
+          <button class="panel__action-btn panel__action-btn--edit" id="p-btn-edit" title="Editar canal">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editar
+          </button>
+          <button class="panel__action-btn panel__action-btn--delete" id="p-btn-delete" title="Eliminar canal">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            Borrar
+          </button>
+        </div>
+      </div>
+
+      <div class="panel__grid">
+        <div class="panel__field">
+          <span class="field-icon">📍</span>
+          <div><div class="field-label">Localidad</div><div class="field-value" id="p-localidad">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">🏘️</span>
+          <div><div class="field-label">Barrio</div><div class="field-value" id="p-barrio">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">📏</span>
+          <div><div class="field-label">Longitud</div><div class="field-value" id="p-longitud">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">🧱</span>
+          <div><div class="field-label">Revestimiento</div><div class="field-value" id="p-revestimiento">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">📐</span>
+          <div><div class="field-label">Sección</div><div class="field-value" id="p-seccion">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">🗺️</span>
+          <div><div class="field-label">Inicio → Final</div><div class="field-value" id="p-tramo">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">📋</span>
+          <div><div class="field-label">Diseños definitivos</div><div class="field-value" id="p-disenios">—</div></div>
+        </div>
+        <div class="panel__field">
+          <span class="field-icon">🌊</span>
+          <div><div class="field-label">Riesgo inundación</div><div class="field-value" id="p-riesgo">—</div></div>
+        </div>
+      </div>
+
+      <!-- Trazado info -->
+      <div class="panel__trazado" id="p-trazado-section">
+        <div class="trazado-header">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l4-4 4 4 4-8 4 4"/></svg>
+          Trazado
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="trazado-info" id="p-trazado-info">Sin trazado registrado</div>
+          <button class="panel__action-btn panel__action-btn--delete" id="p-btn-delete-trazado" style="display:none;font-size:10px;padding:3px 7px;" title="Borrar trazado">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            Borrar trazado
+          </button>
+        </div>
+      </div>
+
+      <!-- Color picker -->
+      <div class="panel__color-section">
+        <span class="field-label">Color del punto y trazado</span>
+        <div class="color-picker-row">
+          <input type="color" id="p-color-input" class="color-swatch-input" title="Cambiar color" />
+          <span class="color-hint">Personaliza el color del marcador y línea</span>
+        </div>
+      </div>
+
+      <!-- Media buttons -->
+      <div class="panel__media-section" id="p-media-section">
+        <button class="media-btn media-btn--video" id="p-btn-video" style="display:none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Ver Video
+        </button>
+        <button class="media-btn media-btn--plano" id="p-btn-plano" style="display:none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Ver Plano
+        </button>
+        <button class="media-btn media-btn--ficha" id="p-btn-ficha" style="display:none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Ficha Técnica
+        </button>
+        <button class="media-btn media-btn--informe" id="p-btn-informe" style="display:none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Ver Informe
+        </button>
+        <!-- Videos adicionales -->
+        <div id="p-extra-videos-section"></div>
+      </div>
+
+      <!-- Fotos -->
+      <div class="panel__fotos-section" id="p-fotos-section" style="display:none;">
+        <div class="trazado-header">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Fotos
+        </div>
+        <div class="fotos-grid" id="p-fotos-container"></div>
+      </div>
+
+      <div class="panel__coords">
+        <span class="field-label">Coordenadas</span>
+        <span class="coords-val" id="p-coords">—</span>
+      </div>
+
+      <div class="panel__future">
+        <span class="future-tag">📊 PostGIS</span>
+        <span class="future-tag">🖼️ Foto drone</span>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ═══ MODAL CRUD ═══ -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal__header">
+        <h3 class="modal__title" id="modal-title">Nuevo Canal</h3>
+        <button class="modal__close" id="modal-close">✕</button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__section-title">Identificación</div>
+        <div class="modal__grid">
+          <div class="modal__field">
+            <label class="modal__label">ID Canal *</label>
+            <input class="modal__input" type="number" id="f-id" placeholder="ej. 101" />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Nombre *</label>
+            <input class="modal__input" type="text" id="f-nombre" placeholder="Canal ..." />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Cuenca</label>
+            <input class="modal__input" type="text" id="f-cuenca" placeholder="ej. A5" />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Localidad *</label>
+            <select class="modal__input" id="f-localidad">
+              <option value="">Seleccionar...</option>
+              <option value="1">1 – Histórica y del Caribe Norte</option>
+              <option value="2">2 – De la Virgen y Turística</option>
+              <option value="3">3 – Industrial de la Bahía</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Barrio</label>
+            <input class="modal__input" type="text" id="f-barrio" placeholder="Nombre del barrio" />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Longitud</label>
+            <input class="modal__input" type="text" id="f-longitud" placeholder="ej. 535 m" />
+          </div>
+        </div>
+
+        <div class="modal__section-title">Técnico</div>
+        <div class="modal__grid">
+          <div class="modal__field">
+            <label class="modal__label">Inicio</label>
+            <input class="modal__input" type="text" id="f-inicio" placeholder="Punto de inicio" />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Final</label>
+            <input class="modal__input" type="text" id="f-final" placeholder="Punto de descarga" />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Sección</label>
+            <select class="modal__input" id="f-seccion">
+              <option value="">Seleccionar...</option>
+              <option>Rectangular</option>
+              <option>Trapezoidal</option>
+              <option>Circular</option>
+              <option>Irregular</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Revestimiento</label>
+            <select class="modal__input" id="f-revestimiento">
+              <option value="">Seleccionar...</option>
+              <option>Concreto</option>
+              <option>Mampostería</option>
+              <option>Tierra</option>
+              <option>Geotextil</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Diseños definitivos</label>
+            <select class="modal__input" id="f-disenios">
+              <option value="No">No</option>
+              <option value="Sí">Sí</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Riesgo inundación</label>
+            <select class="modal__input" id="f-riesgo">
+              <option value="">Seleccionar...</option>
+              <option>Bajo</option>
+              <option>Medio</option>
+              <option>Alto</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal__section-title">Estado y ubicación</div>
+        <div class="modal__grid">
+          <div class="modal__field">
+            <label class="modal__label">Estado *</label>
+            <select class="modal__input" id="f-estado">
+              <option value="">Seleccionar...</option>
+              <option>Bueno</option>
+              <option>Regular</option>
+              <option>Deficiente</option>
+              <option>Crítico</option>
+            </select>
+          </div>
+          <div class="modal__field modal__field--hint">
+            <label class="modal__label">Latitud *</label>
+            <input class="modal__input" type="number" step="0.00001" id="f-lat" placeholder="10.39..." />
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">Longitud coord. *</label>
+            <input class="modal__input" type="number" step="0.00001" id="f-lng" placeholder="-75.47..." />
+          </div>
+        </div>
+        <div class="modal__map-hint">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+          Tip: también puedes hacer clic en el mapa con el modal cerrado para obtener coordenadas.
+        </div>
+
+        <!-- ═══ MULTIMEDIA POR LINKS ═══ -->
+        <div class="modal__section-title">
+          Archivos multimedia
+          <span style="font-size:9px;color:var(--c-muted);font-family:var(--font-sans);text-transform:none;letter-spacing:0">
+            (pega links públicos — Google Drive, YouTube, Dropbox, etc.)
+          </span>
+        </div>
+        <div class="modal__grid">
+
+          <!-- VIDEOS — múltiples links -->
+          <div class="modal__field modal__field--full">
+            <label class="modal__label">🎬 Videos del trazado</label>
+            <div class="link-group" id="videos-group">
+              <!-- Se generan dinámicamente -->
+            </div>
+            <button class="link-add-btn" type="button" id="btn-add-video" style="margin-top:6px;">+ Añadir video</button>
+          </div>
+
+          <!-- PLANO PDF — un link -->
+          <div class="modal__field">
+            <label class="modal__label">📄 Plano (PDF)</label>
+            <input class="modal__input" type="url" id="f-plano" placeholder="https://..." />
+          </div>
+
+          <!-- FICHA TÉCNICA PDF — un link -->
+          <div class="modal__field">
+            <label class="modal__label">📋 Ficha Técnica (PDF)</label>
+            <input class="modal__input" type="url" id="f-ficha" placeholder="https://..." />
+          </div>
+
+          <!-- INFORME PDF — un link -->
+          <div class="modal__field">
+            <label class="modal__label">📑 Informe (PDF)</label>
+            <input class="modal__input" type="url" id="f-informe" placeholder="https://..." />
+          </div>
+
+          <!-- FOTOS — múltiples links -->
+          <div class="modal__field modal__field--full">
+            <label class="modal__label">🖼️ Fotos (links de imagen)</label>
+            <div class="link-group" id="fotos-group">
+              <!-- Se generan dinámicamente -->
+            </div>
+            <button class="link-add-btn" type="button" id="btn-add-foto" style="margin-top:6px;">+ Añadir foto</button>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal__footer">
+        <div class="modal__error" id="modal-error"></div>
+        <button class="btn-secondary" id="modal-cancel">Cancelar</button>
+        <button class="btn-primary" id="modal-save">Guardar canal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONFIRM DIALOG ═══ -->
+  <div class="modal-overlay" id="confirm-overlay">
+    <div class="modal modal--sm" id="confirm-modal">
+      <div class="modal__header">
+        <h3 class="modal__title">¿Eliminar canal?</h3>
+      </div>
+      <div class="modal__body">
+        <p class="confirm-text" id="confirm-text">Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal__footer">
+        <button class="btn-secondary" id="confirm-cancel">Cancelar</button>
+        <button class="btn-danger" id="confirm-ok">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ═══ LIGHTBOX VIEWER ═══ -->
+  <div class="lightbox-overlay" id="lightbox-overlay">
+    <div class="lightbox-container" id="lightbox-container">
+      <div class="lightbox-header">
+        <span class="lightbox-title" id="lightbox-title">Vista previa</span>
+        <button class="lightbox-close" id="lightbox-close" title="Cerrar (Esc)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="lightbox-body" id="lightbox-body"></div>
+    </div>
+  </div>
+
+  <!-- ═══ LOGIN MODAL ═══ -->
+  <div class="modal-overlay" id="login-overlay">
+    <div class="modal modal--sm" id="login-modal">
+      <div class="modal__header">
+        <h3 class="modal__title">Acceso Administrativo</h3>
+        <button class="modal__close" id="login-close">✕</button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__section-title">Credenciales requeridas</div>
+        <div class="modal__grid">
+          <div class="modal__field modal__field--full">
+            <label class="modal__label">Usuario</label>
+            <input class="modal__input" type="text" id="login-user" placeholder="Ingrese usuario" autocomplete="username" />
+          </div>
+          <div class="modal__field modal__field--full">
+            <label class="modal__label">Contraseña</label>
+            <input class="modal__input" type="password" id="login-pass" placeholder="Ingrese contraseña" autocomplete="current-password" />
+          </div>
+        </div>
+        <div class="modal__error" id="login-error" style="margin-top:12px;"></div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn-secondary" id="login-cancel">Cancelar</button>
+        <button class="btn-primary" id="login-submit">Acceder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
