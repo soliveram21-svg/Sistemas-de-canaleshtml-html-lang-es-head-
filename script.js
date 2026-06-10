@@ -42,8 +42,9 @@ const LOCALIDAD_NAMES = {
 };
 
 const ADMIN_CREDENTIALS = {
-  user: '1001977786',
-  pass: '1001977786'
+  user: 'Admin',
+  pass: 'Valo2026'
+   
 };
 
 /* ─────────────────────────────────────────────────────────────
